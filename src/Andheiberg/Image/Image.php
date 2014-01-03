@@ -90,22 +90,27 @@ class Image {
 	 */
 	public function processOptions($options = array())
 	{
-		$opt = array('resize' => array('width' => null, 'height' => null));
+		$parsedOptions = [];
+
+		if (isset($options['preset']))
+		{
+			$parsedOptions = $this->config->get('image::presets', [])[$options['preset']];
+		}
 
 		foreach ($options as $key => $value)
 		{
 			if (in_array($key, ['h', 'height']))
 			{
-				$opt['resize']['height'] = $value;
+				$parsedOptions['resize']['height'] = $value;
 			}
 
 			if (in_array($key, ['w', 'width']))
 			{
-				$opt['resize']['width'] = $value;
+				$parsedOptions['resize']['width'] = $value;
 			}
 		}
-		
-		return $opt;		
+
+		return $parsedOptions;		
 	}
 
 }

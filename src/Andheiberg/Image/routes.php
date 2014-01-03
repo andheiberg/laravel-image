@@ -1,7 +1,8 @@
 <?php
 
 foreach(Config::get('image::routes') as $route) {
-	Route::get($route.'{file}', function($file) {
-		return App::make('image')->serve('/assets/images/'.$file, Input::all());
+	Route::get($route, function() {
+		$wildcards = func_get_args();
+		return App::make('image')->serve('/'.Request::path(), Input::all());
 	});
 }
