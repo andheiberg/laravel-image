@@ -3,15 +3,16 @@
 use Illuminate\Http\Request;
 use Illuminate\Config\Repository as Config;
 use Intervention\Image\Image as Worker;
+use Flysystem\Filesystem;
 
 class Image {
 
 	/**
-	 * The input implementation.
+	 * The filesystem implementation.
 	 *
-	 * @var \Illuminate\Http\Request
+	 * @var \Illuminate\Config\Repository
 	 */
-	protected $input;
+	protected $filesystem;
 
 	/**
 	 * The config implementation.
@@ -32,9 +33,9 @@ class Image {
 	 *
 	 * @return void
 	 */
-	public function __construct(Request $request, Config $config, Worker $worker)
+	public function __construct(Filesystem $filesystem, Config $config, Worker $worker)
 	{
-		$this->input = $request;
+		$this->filesystem = $filesystem;
 		$this->config = $config;
 		$this->worker = $worker;
 	}
@@ -76,7 +77,7 @@ class Image {
 
 		$path = $this->getCachedFile($url, $options);
 
-		if ( ! file_exists(public_path().$path))
+		if ( ! $this->filesystem->has(public_path().$path))
 		{
 			return false;
 		}
@@ -106,12 +107,12 @@ class Image {
 		$folder = $this->getCachedFolder($url, true);
 		$path = $this->getCachedFile($url, $options, true);
 
-		if ( ! is_dir($folder))
+		if ( ! $this->filesystem->has($folder))
 		{
-			mkdir($folder, 0777, true);
+			$this->filesystem->createDir($folder);
 		}
 
-		$image->save($path);
+		$this->filesystem->put($path, $image->encode());
 
 		return $image->response();
 	}

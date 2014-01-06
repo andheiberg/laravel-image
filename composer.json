@@ -12,7 +12,7 @@
         "php": ">=5.3.0",
         "illuminate/support": "4.x",
         "intervention/image": "1.*",
-        "illuminate/filesystem": "4.x"
+        "frenkynet/flysystem": "0.1.*"
     },
     "autoload": {
         "psr-0": {
