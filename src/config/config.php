@@ -8,7 +8,7 @@ return array(
 	),
 
 	'cache' => array(
-		'lifetime' => 10080, // in minutes
+		'destination' => '/images',
 	),
 
 	'presets' => array(

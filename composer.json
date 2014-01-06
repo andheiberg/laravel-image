@@ -12,7 +12,6 @@
         "php": ">=5.3.0",
         "illuminate/support": "4.x",
         "intervention/image": "1.*",
-        "intervention/imagecache": "0.*",
         "illuminate/filesystem": "4.x"
     },
     "autoload": {

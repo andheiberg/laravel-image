@@ -11,7 +11,7 @@ class Image {
 	 *
 	 * @var \Illuminate\Http\Request
 	 */
-	protected $request;
+	protected $input;
 
 	/**
 	 * The config implementation.
@@ -48,14 +48,40 @@ class Image {
 	 */
 	public function url($url, $options = array())
 	{
-		$options = http_build_query($options);
-
-		if ($options != '')
+		if ($cached = $this->fileExists($url, $options))
 		{
+			return $cached;
+		}
+
+		if ( ! empty($options))
+		{
+			$options = http_build_query($options);
+
 			$url = $url.'?'.$options; 
 		}
 
 		return $url;
+	}
+
+	/**
+	 * Check if file is on disk
+	 *
+	 * @param  string  $url
+	 * @param  array   $options
+	 * @return string
+	 */
+	public function fileExists($url, $options = array())
+	{
+		$options = $this->processOptions($options);
+
+		$path = $this->getCachedFile($url, $options);
+
+		if ( ! file_exists(public_path().$path))
+		{
+			return false;
+		}
+
+		return $path;
 	}
 
 	/**
@@ -74,10 +100,18 @@ class Image {
 
 		$options = $this->processOptions($options);
 
-		$image = $this->worker->cache(function($image) use ($url, $options) {
-			return $image->make(public_path().$url)
-			->grab($options['resize']['width'], $options['resize']['height']);
-		}, $this->config->get('image::cache.lifetime'), true);
+		$image = $this->worker->make(public_path().$url)
+		->grab($options['resize']['width'], $options['resize']['height']);
+
+		$folder = $this->getCachedFolder($url, true);
+		$path = $this->getCachedFile($url, $options, true);
+
+		if ( ! is_dir($folder))
+		{
+			mkdir($folder, 0777, true);
+		}
+
+		$image->save($path);
 
 		return $image->response();
 	}
@@ -111,6 +145,79 @@ class Image {
 		}
 
 		return $parsedOptions;		
+	}
+
+	/**
+	 * Parse given options and normalize them
+	 *
+	 * @param  array   $options
+	 * @return string
+	 */
+	public function processOptionsToFileString($options = array())
+	{
+		return $options['resize']['width'].'x'.$options['resize']['height'];	
+	}
+
+	/**
+	 * Parse given options and normalize them
+	 *
+	 * @param  array   $options
+	 * @return string
+	 */
+	public function processOptionsToExtension($options = array())
+	{
+		return $options['resize']['width'].'x'.$options['resize']['height'];	
+	}
+
+	/**
+	 * Parse given options and normalize them
+	 *
+	 * @param  array   $options
+	 * @return string
+	 */
+	public function getCacheFolder($absolute = false)
+	{
+		$path  = $absolute ? public_path() : '';
+		$path .= $this->config->get('image::cache.destination');
+
+		return $path;
+	}
+
+	/**
+	 * Parse given options and normalize them
+	 *
+	 * @param  array   $options
+	 * @return string
+	 */
+	public function getExtensionFromUrl($url)
+	{
+		return substr(strrchr($url,'.'),1);
+	}
+
+	/**
+	 * Parse given options and normalize them
+	 *
+	 * @param  array   $options
+	 * @return string
+	 */
+	public function getCachedFolder($url, $absolute = false)
+	{
+		return $this->getCacheFolder($absolute).$url;
+	}
+
+	/**
+	 * Parse given options and normalize them
+	 *
+	 * @param  array   $options
+	 * @return string
+	 */
+	public function getCachedFile($url, $options = array(), $absolute = false)
+	{
+		$folder  = $this->getCachedFolder($url, $absolute);
+		$name = $this->processOptionsToFileString($options);
+		$extension = $this->getExtensionFromUrl($url);
+
+		return "{$folder}{$name}.{$extension}";
 	}
 
 }
