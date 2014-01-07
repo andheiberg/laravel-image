@@ -8,7 +8,14 @@ use Flysystem\Filesystem;
 class Image {
 
 	/**
-	 * The filesystem implementation.
+	 * The filesystem implementation for the local filesystem.
+	 *
+	 * @var \Illuminate\Config\Repository
+	 */
+	protected $local;
+
+	/**
+	 * The filesystem implementation for the remote filesystem.
 	 *
 	 * @var \Illuminate\Config\Repository
 	 */
@@ -33,8 +40,9 @@ class Image {
 	 *
 	 * @return void
 	 */
-	public function __construct(Filesystem $filesystem, Config $config, Worker $worker)
+	public function __construct(Filesystem $local, Filesystem $filesystem, Config $config, Worker $worker)
 	{
+		$this->local = $local;
 		$this->filesystem = $filesystem;
 		$this->config = $config;
 		$this->worker = $worker;
@@ -52,6 +60,15 @@ class Image {
 		if ($cached = $this->fileExists($url, $options))
 		{
 			return $cached;
+		}
+
+		if (preg_match('/^(?:(https?:\/\/)|(www\.))(.*)/', $url, $matches))
+		{
+			$options = $this->processOptions($options);
+
+			$this->saveRemoteFileToCache($url, $options);
+
+			return $this->url($url, $options);
 		}
 
 		if ( ! empty($options))
@@ -77,9 +94,14 @@ class Image {
 
 		$path = $this->getCachedFile($url, $options);
 
-		if ( ! $this->filesystem->has(public_path().$path))
+		if ( ! $this->filesystem->has($path))
 		{
 			return false;
+		}
+
+		if ($this->config->get('image::cache.store') == 's3')
+		{
+			return "http://{$this->config->get('image::cache.bucket')}.s3.amazonaws.com{$path}";
 		}
 
 		return $path;
@@ -94,25 +116,24 @@ class Image {
 	 */
 	public function serve($url, $options = array())
 	{
-		if ( ! is_file(public_path().$url))
+		$options = $this->processOptions($options);
+
+		if ($this->local->has($url))
+		{
+			$file = $this->local;
+		}
+		elseif ($this->filesystem->has($url))
+		{
+			$file = $this->filesystem;
+		}
+		else
 		{
 			throw new \Exception("Image doesn't exist.");
 		}
 
-		$options = $this->processOptions($options);
+		$file = $file->get($url);
 
-		$image = $this->worker->make(public_path().$url)
-		->grab($options['resize']['width'], $options['resize']['height']);
-
-		$folder = $this->getCachedFolder($url, true);
-		$path = $this->getCachedFile($url, $options, true);
-
-		if ( ! $this->filesystem->has($folder))
-		{
-			$this->filesystem->createDir($folder);
-		}
-
-		$this->filesystem->put($path, $image->encode());
+		$image = $this->saveFileToCache($file->read(), $url, $options);
 
 		return $image->response();
 	}
@@ -165,23 +186,9 @@ class Image {
 	 * @param  array   $options
 	 * @return string
 	 */
-	public function processOptionsToExtension($options = array())
+	public function getCacheFolder()
 	{
-		return $options['resize']['width'].'x'.$options['resize']['height'];	
-	}
-
-	/**
-	 * Parse given options and normalize them
-	 *
-	 * @param  array   $options
-	 * @return string
-	 */
-	public function getCacheFolder($absolute = false)
-	{
-		$path  = $absolute ? public_path() : '';
-		$path .= $this->config->get('image::cache.destination');
-
-		return $path;
+		return $this->config->get('image::cache.destination');
 	}
 
 	/**
@@ -201,9 +208,14 @@ class Image {
 	 * @param  array   $options
 	 * @return string
 	 */
-	public function getCachedFolder($url, $absolute = false)
+	public function getCachedFolder($url)
 	{
-		return $this->getCacheFolder($absolute).$url;
+		if (preg_match('/^(?:https?:\/\/)?(?:www\.)?(.*)/', $url, $matches))
+		{
+			$url = $matches[1];
+		}
+
+		return $this->getCacheFolder().$url;
 	}
 
 	/**
@@ -218,7 +230,66 @@ class Image {
 		$name = $this->processOptionsToFileString($options);
 		$extension = $this->getExtensionFromUrl($url);
 
-		return "{$folder}{$name}.{$extension}";
+		return "{$folder}/{$name}.{$extension}";
+	}
+
+	/**
+	 * Save a file to cache
+	 *
+	 * @param  mixed   $file path|file contents
+	 * @param  string  $url
+	 * @param  array   $options
+	 * @return string
+	 */
+	public function saveFileToCache($file, $url, $options = array())
+	{
+		$image = $this->worker->make($file)
+		->grab($options['resize']['width'], $options['resize']['height']);
+
+		$folder = $this->getCachedFolder($url, true);
+		$path = $this->getCachedFile($url, $options, true);
+
+		if ( ! $this->filesystem->has($folder))
+		{
+			$this->filesystem->createDir($folder);
+		}
+
+		$this->filesystem->put($path, $image->encode(), ['visibility' => 'public']);
+
+		return $image;
+	}
+
+	/**
+	 * Save a remote file to cache
+	 *
+	 * @param  string  $url
+	 * @param  array   $options
+	 * @return string
+	 */
+	public function saveRemoteFileToCache($url, $options = array())
+	{
+		$url = explode('/', $matches[1]);
+		$folder = storage_path().'/tmp/'.implode(array_slice($url, 0, -1));
+		$file = end($url);
+		$url = implode('/', $url);
+		$tmp = $folder.'/'.$file;
+
+		if ( ! is_dir($folder))
+		{
+			mkdir($folder, 0777, true);
+		}
+
+		file_put_contents($tmp, '');
+
+		$ch = curl_init($url);
+		$fp = fopen($tmp, 'wb');
+		curl_setopt($ch, CURLOPT_FILE, $fp);
+		curl_setopt($ch, CURLOPT_HEADER, 0);
+		curl_exec($ch);
+		curl_close($ch);
+		fclose($fp);
+
+		return $this->saveFileToCache($tmp, $url, $options);
 	}
 
 }
