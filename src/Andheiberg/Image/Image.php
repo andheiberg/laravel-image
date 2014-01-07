@@ -64,6 +64,8 @@ class Image {
 
 		if (preg_match('/^(?:(https?:\/\/)|(www\.))(.*)/', $url, $matches))
 		{
+			$url = $matches[3];
+
 			$options = $this->processOptions($options);
 
 			$this->saveRemoteFileToCache($url, $options);
@@ -146,27 +148,27 @@ class Image {
 	 */
 	public function processOptions($options = array())
 	{
-		$parsedOptions = [];
-
 		if (isset($options['preset']))
 		{
-			$parsedOptions = $this->config->get('image::presets', [])[$options['preset']];
+			$preset = $this->config->get("image::presets", [])[$options['preset']];
+
+			$options = array_merge($options, $preset);
 		}
 
 		foreach ($options as $key => $value)
 		{
 			if (in_array($key, ['h', 'height']))
 			{
-				$parsedOptions['resize']['height'] = $value;
+				$options['resize']['height'] = $value;
 			}
 
 			if (in_array($key, ['w', 'width']))
 			{
-				$parsedOptions['resize']['width'] = $value;
+				$options['resize']['width'] = $value;
 			}
 		}
 
-		return $parsedOptions;		
+		return $options;		
 	}
 
 	/**
@@ -210,9 +212,9 @@ class Image {
 	 */
 	public function getCachedFolder($url)
 	{
-		if (preg_match('/^(?:https?:\/\/)?(?:www\.)?(.*)/', $url, $matches))
+		if (preg_match('/^(?:(https?:\/\/)|(www\.))(.*)/', $url, $matches))
 		{
-			$url = $matches[1];
+			$url = '/'.$matches[3];
 		}
 
 		return $this->getCacheFolder().$url;
@@ -246,13 +248,7 @@ class Image {
 		$image = $this->worker->make($file)
 		->grab($options['resize']['width'], $options['resize']['height']);
 
-		$folder = $this->getCachedFolder($url, true);
-		$path = $this->getCachedFile($url, $options, true);
-
-		if ( ! $this->filesystem->has($folder))
-		{
-			$this->filesystem->createDir($folder);
-		}
+		$path = $this->getCachedFile($url, $options);
 
 		$this->filesystem->put($path, $image->encode(), ['visibility' => 'public']);
 
@@ -268,18 +264,17 @@ class Image {
 	 */
 	public function saveRemoteFileToCache($url, $options = array())
 	{
-		$url = explode('/', $matches[1]);
-		$folder = storage_path().'/tmp/'.implode(array_slice($url, 0, -1));
+		$url = explode('/', $url);
+		$folder = '/app/storage/tmp/'.implode(array_slice($url, 0, -1));
 		$file = end($url);
 		$url = implode('/', $url);
 		$tmp = $folder.'/'.$file;
 
-		if ( ! is_dir($folder))
-		{
-			mkdir($folder, 0777, true);
-		}
+		$unmask = umask(0); // get around 0777 not working
+		$this->local->put($tmp, '');
+		umask($unmask);
 
-		file_put_contents($tmp, '');
+		$tmp = base_path().$tmp; // $tmp needs to be absolute from here on
 
 		$ch = curl_init($url);
 		$fp = fopen($tmp, 'wb');
@@ -289,7 +284,7 @@ class Image {
 		curl_close($ch);
 		fclose($fp);
 
-		return $this->saveFileToCache($tmp, $url, $options);
+		return $this->saveFileToCache($tmp, '/'.$url, $options);
 	}
 
 }

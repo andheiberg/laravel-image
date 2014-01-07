@@ -29,7 +29,7 @@ return array(
 
 	'cache' => array(
 		'store'       => 'local',
-		'destination' => '/images',
+		'destination' => '/public/images',
 		'bucket'      => '',
 		'key'         => '',
 		'secret'      => '',

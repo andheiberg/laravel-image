@@ -48,9 +48,13 @@ class ImageServiceProvider extends ServiceProvider {
 					['visibility' => AdapterInterface::VISIBILITY_PUBLIC]
 				));
 			}
+			else
+			{
+				$filesystem = new Filesystem(new LocalAdapter(base_path()));
+			}
 
 			return new Image(
-				new Filesystem(new LocalAdapter(public_path())),
+				new Filesystem(new LocalAdapter(base_path())),
 				$filesystem,
 				$app['config'],
 				new Worker
