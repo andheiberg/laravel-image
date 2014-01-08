@@ -4,17 +4,27 @@ return array(
 
 	/*
 	|--------------------------------------------------------------------------
-	| Routes
+	| Image Worker
 	|--------------------------------------------------------------------------
 	|
-	| The routes that this package should intercept and process on the fly.
+	| The image processing library to be used.
+	|
+	| Supported: "Imagick", "Gd"
 	|
 	*/
 
-	'routes' => array(
-		'/assets/images/{file}',
-		'/uploads/{folder}/{file}',
-	),
+	'worker' => 'Imagick',
+
+	/*
+	|--------------------------------------------------------------------------
+	| Route
+	|--------------------------------------------------------------------------
+	|
+	| The route to be used when building image processing url.
+	|
+	*/
+
+	'route' => '/image',
 
 	/*
 	|--------------------------------------------------------------------------

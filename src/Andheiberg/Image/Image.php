@@ -2,7 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Config\Repository as Config;
-use Intervention\Image\Image as Worker;
+use Imagecow\Image as Worker;
 use Flysystem\Filesystem;
 
 class Image {
@@ -57,20 +57,16 @@ class Image {
 	 */
 	public function url($url, $options = array())
 	{
-		if ($cached = $this->fileExists($url, $options))
+		if ($cached = $this->getUrlFromCache($url, $this->processOptions($options)))
 		{
 			return $cached;
 		}
 
 		if (preg_match('/^(?:(https?:\/\/)|(www\.))(.*)/', $url, $matches))
 		{
-			$url = $matches[3];
+			$options['src'] = $url;
 
-			$options = $this->processOptions($options);
-
-			$this->saveRemoteFileToCache($url, $options);
-
-			return $this->url($url, $options);
+			$url = $this->config->get('image::route');
 		}
 
 		if ( ! empty($options))
@@ -84,16 +80,57 @@ class Image {
 	}
 
 	/**
+	 * Find and serve an image
+	 *
+	 * @param  string  $url
+	 * @param  array   $options
+	 * @return string
+	 */
+	public function serve($url, $options = array())
+	{
+		$options = $this->processOptions($options);
+
+		if ($cached = $this->getUrlFromCache($url, $options))
+		{
+			return $cached;
+		}
+
+		if (preg_match('/^(?:(https?:\/\/)|(www\.))(.*)/', $url, $matches))
+		{
+			$url = $matches[3];
+
+			$image = $this->saveRemoteFileToCache($url, $options);
+		}
+		elseif ($this->local->has('/public'.$url))
+		{
+			$image = $this->saveFileToCache(public_path().$url, $url, $options);
+		}
+		elseif ($this->filesystem->has($url))
+		{
+			$file = $this->filesystem->get($url);
+
+			$image = $this->saveFileToCache($file->read(), $url, $options);
+		}
+		else
+		{
+			throw new \Exception("Image doesn't exist.");
+		}
+
+		$image->show();
+
+		// if the script didn't die then it will have an error (Imagecow::show() dies when it returns image data)
+		throw new \Exception($image->getError()->getMessage());
+	}
+
+	/**
 	 * Check if file is on disk
 	 *
 	 * @param  string  $url
 	 * @param  array   $options
 	 * @return string
 	 */
-	public function fileExists($url, $options = array())
+	public function getUrlFromCache($url, $options = array())
 	{
-		$options = $this->processOptions($options);
-
 		$path = $this->getCachedFile($url, $options);
 
 		if ( ! $this->filesystem->has($path))
@@ -110,37 +147,6 @@ class Image {
 	}
 
 	/**
-	 * Find and serve an image
-	 *
-	 * @param  string  $url
-	 * @param  array   $options
-	 * @return string
-	 */
-	public function serve($url, $options = array())
-	{
-		$options = $this->processOptions($options);
-
-		if ($this->local->has($url))
-		{
-			$file = $this->local;
-		}
-		elseif ($this->filesystem->has($url))
-		{
-			$file = $this->filesystem;
-		}
-		else
-		{
-			throw new \Exception("Image doesn't exist.");
-		}
-
-		$file = $file->get($url);
-
-		$image = $this->saveFileToCache($file->read(), $url, $options);
-
-		return $image->response();
-	}
-
-	/**
 	 * Parse given options and normalize them
 	 *
 	 * @param  array   $options
@@ -148,6 +154,8 @@ class Image {
 	 */
 	public function processOptions($options = array())
 	{
+		$options = array_merge(['resize' => ['height' => null, 'width' => null]], $options);
+
 		if (isset($options['preset']))
 		{
 			$preset = $this->config->get("image::presets", [])[$options['preset']];
@@ -172,7 +180,7 @@ class Image {
 	}
 
 	/**
-	 * Parse given options and normalize them
+	 * Parse given options to a string that can be part of file name
 	 *
 	 * @param  array   $options
 	 * @return string
@@ -245,12 +253,12 @@ class Image {
 	 */
 	public function saveFileToCache($file, $url, $options = array())
 	{
-		$image = $this->worker->make($file)
-		->grab($options['resize']['width'], $options['resize']['height']);
+		$image = $this->worker->load($file)
+		->resizeCrop($options['resize']['width'], $options['resize']['height']);
 
 		$path = $this->getCachedFile($url, $options);
 
-		$this->filesystem->put($path, $image->encode(), ['visibility' => 'public']);
+		$this->filesystem->put($path, $image->getString(), ['visibility' => 'public']);
 
 		return $image;
 	}
@@ -270,9 +278,7 @@ class Image {
 		$url = implode('/', $url);
 		$tmp = $folder.'/'.$file;
 
-		$unmask = umask(0); // get around 0777 not working
 		$this->local->put($tmp, '');
-		umask($unmask);
 
 		$tmp = base_path().$tmp; // $tmp needs to be absolute from here on
 

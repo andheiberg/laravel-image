@@ -1,7 +1,7 @@
 <?php namespace Andheiberg\Image;
 
 use Illuminate\Support\ServiceProvider;
-use Intervention\Image\Image as Worker;
+use Imagecow\Image as Worker;
 use Aws\S3\S3Client;
 use Flysystem\Filesystem;
 use Flysystem\AdapterInterface;
@@ -31,8 +31,30 @@ class ImageServiceProvider extends ServiceProvider {
 	 */
 	public function register()
 	{
+		$this->registerFilesystem();
+		$this->registerWorker();
+
 		// Register 'Image' instance container to our Image object
 		$this->app['image'] = $this->app->share(function($app)
+		{
+			return new Image(
+				new Filesystem(new LocalAdapter(base_path())),
+				$app['image.filesystem'],
+				$app['config'],
+				$app['image.worker']
+			);
+		});
+	}
+
+	/**
+	 * Register the filesystem for caching.
+	 *
+	 * @return void
+	 */
+	public function registerFilesystem()
+	{
+		// Register 'Image' instance container to our Image object
+		$this->app['image.filesystem'] = $this->app->share(function($app)
 		{
 			if ($app['config']->get('image::cache.store') == 's3')
 			{
@@ -41,24 +63,28 @@ class ImageServiceProvider extends ServiceProvider {
 					'secret' => $app['config']->get('image::cache.secret'),
 				));
 
-				$filesystem = new Filesystem(new AwsS3Adapter(
+				return new Filesystem(new AwsS3Adapter(
 					$client,
 					$app['config']->get('image::cache.bucket'),
 					$app['config']->get('image::cache.prefix'),
 					['visibility' => AdapterInterface::VISIBILITY_PUBLIC]
 				));
 			}
-			else
-			{
-				$filesystem = new Filesystem(new LocalAdapter(base_path()));
-			}
+			
+			return new Filesystem(new LocalAdapter(base_path()));
+		});
+	}
 
-			return new Image(
-				new Filesystem(new LocalAdapter(base_path())),
-				$filesystem,
-				$app['config'],
-				new Worker
-			);
+	/**
+	 * Register the image worker.
+	 *
+	 * @return void
+	 */
+	public function registerWorker()
+	{
+		$this->app['image.worker'] = $this->app->share(function($app)
+		{
+			return Worker::create($app['config']->get('image::worker'));
 		});
 	}
 
