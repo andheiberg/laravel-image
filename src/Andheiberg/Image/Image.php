@@ -137,10 +137,18 @@ class Image {
 		{
 			return false;
 		}
+		else
+		{
+			$prefix = '/public';
+			if (substr($path, 0, strlen($prefix)) == $prefix)
+			{
+				$path = substr($path, strlen($prefix));
+			}
+		}
 
 		if ($this->config->get('image::cache.store') == 's3')
 		{
-			return "http://{$this->config->get('image::cache.bucket')}.s3.amazonaws.com{$path}";
+			$path = "http://{$this->config->get('image::cache.bucket')}.s3.amazonaws.com{$path}";
 		}
 
 		return $path;
