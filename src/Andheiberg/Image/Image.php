@@ -162,13 +162,13 @@ class Image {
 	 */
 	public function processOptions($options = array())
 	{
-		$options = array_merge(['resize' => ['height' => null, 'width' => null]], $options);
+		$options = array_merge(['resize' => ['height' => null, 'width' => null, 'x' => 'center', 'y' => 'middle']], $options);
 
 		if (isset($options['preset']))
 		{
 			$preset = $this->config->get("image::presets", [])[$options['preset']];
 
-			$options = array_merge($options, $preset);
+			$options['resize'] = array_merge($options['resize'], $preset['resize']);
 		}
 
 		foreach ($options as $key => $value)
@@ -177,10 +177,17 @@ class Image {
 			{
 				$options['resize']['height'] = $value;
 			}
-
-			if (in_array($key, ['w', 'width']))
+			elseif (in_array($key, ['w', 'width']))
 			{
 				$options['resize']['width'] = $value;
+			}
+			elseif ($key == 'x')
+			{
+				$options['resize']['x'] = $value;
+			}
+			elseif ($key == 'y')
+			{
+				$options['resize']['y'] = $value;
 			}
 		}
 
@@ -262,7 +269,7 @@ class Image {
 	public function saveFileToCache($file, $url, $options = array())
 	{
 		$image = $this->worker->load($file)
-		->resizeCrop($options['resize']['width'], $options['resize']['height']);
+		->resizeCrop($options['resize']['width'], $options['resize']['height'], $options['resize']['x'], $options['resize']['y']);
 
 		$path = $this->getCachedFile($url, $options);
 
