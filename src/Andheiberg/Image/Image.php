@@ -269,6 +269,7 @@ class Image {
 	public function saveFileToCache($file, $url, $options = array())
 	{
 		$image = $this->worker->load($file)
+		->autoRotate()
 		->resizeCrop($options['resize']['width'], $options['resize']['height'], $options['resize']['x'], $options['resize']['y']);
 
 		$path = $this->getCachedFile($url, $options);
