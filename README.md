@@ -42,7 +42,7 @@ Run ```composer require andheiberg/image:1.*```
 
 Add `'Andheiberg\Image\ImageServiceProvider',` to `providers` in `app/config/app.php`
 
-Add `'Image' => \Image\Facades\Image',` to `aliases` in `app/config/app.php`
+Add `'Image' => 'Andheiberg\Image\Facades\Image',` to `aliases` in `app/config/app.php`
 
 Run ```php artisan config:publish andheiberg/image```
 
