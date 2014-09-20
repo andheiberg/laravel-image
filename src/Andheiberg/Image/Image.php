@@ -3,7 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Config\Repository as Config;
 use Imagecow\Image as Worker;
-use Flysystem\Filesystem;
+use League\Flysystem\Filesystem;
 
 class Image {
 

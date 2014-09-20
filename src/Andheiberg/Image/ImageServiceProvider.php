@@ -3,10 +3,10 @@
 use Illuminate\Support\ServiceProvider;
 use Imagecow\Image as Worker;
 use Aws\S3\S3Client;
-use Flysystem\Filesystem;
-use Flysystem\AdapterInterface;
-use Flysystem\Adapter\AwsS3 as AwsS3Adapter;
-use Flysystem\Adapter\Local as LocalAdapter;
+use League\Flysystem\Filesystem;
+use League\Flysystem\AdapterInterface;
+use League\Flysystem\Adapter\AwsS3 as AwsS3Adapter;
+use League\Flysystem\Adapter\Local as LocalAdapter;
 
 class ImageServiceProvider extends ServiceProvider {
 
